@@ -50,10 +50,23 @@ h1,h2{margin:0}
 h1.big{font-family:Orbitron,Inter,sans-serif;font-size:clamp(2.4rem,7vw,5.6rem);letter-spacing:.05em;margin:6px 0 4px}
 h2.hero-title{font-family:Orbitron,Inter,sans-serif;font-size:clamp(1.8rem,6vw,4.6rem);letter-spacing:.05em;margin:0 0 10px}
 .subtitle{color:var(--muted);margin:0 0 24px}
+/* ensure the chip’s box matches the pill and doesn't stretch */
+.badges { align-items: center; }
 .badges{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin:24px 0}
-.badge{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#0e1324,#090d18);border:1px solid #1a2140;padding:10px 12px;border-radius:999px;box-shadow:var(--ring)}
 .badge .icon{width:22px;height:22px;color:var(--neon1)}
 .cta{display:inline-block;padding:14px 22px;border-radius:12px;background:linear-gradient(135deg,var(--neon1),var(--neon2));color:#02040a;text-decoration:none;font-weight:700;box-shadow:0 6px 28px rgba(0,255,209,.35);border:0}
+.badge{
+  display:inline-flex;                 /* <-- not block-level */
+  align-items:center;
+  gap:10px;
+  background:linear-gradient(135deg,#0e1324,#090d18);
+  border:1px solid #1a2140;
+  padding:10px 12px;
+  border-radius:999px;
+  box-shadow:var(--ring);
+  transform-origin:center center;      /* pivot middle */
+  transform-box:border-box;            /* harmless for HTML, helps some engines */
+}
 .cta:hover{transform:translateY(-1px);filter:brightness(1.05)}
 .scroll-indicator{margin-top:30px;font-size:.85rem;color:#a2b5c5;opacity:.8;animation:float 2s ease-in-out infinite}
 @keyframes float{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
@@ -289,6 +302,15 @@ summary{cursor:pointer;font-weight:600}
     requestAnimationFrame(tick);
   })();
 })();
+
+// ensure pivot is exact center in pixels (guards against flex/layout quirks)
+requestAnimationFrame(() => {
+  document.querySelectorAll('.badge').forEach(el => {
+    const r = el.getBoundingClientRect();
+    gsap.set(el, { transformOrigin: `${r.width/2}px ${r.height/2}px`, force3D:true });
+  });
+});
+
 /* ========= Mini track animation (responsive, no cut-off) ========= */
 (function(){
   const c = document.getElementById('track'); const ctx = c.getContext('2d');
@@ -353,6 +375,45 @@ summary{cursor:pointer;font-weight:600}
 })();
 
 /* ========= Page animations (GSAP) ========= */
+(function fixBadgePivot(){
+  const badges = gsap.utils.toArray('.badge');
+
+  function setOrigin(el){
+    const r = el.getBoundingClientRect();
+    gsap.set(el, { transformOrigin: `${r.width/2}px ${r.height/2}px` });
+  }
+  function setAll(){ badges.forEach(setOrigin); }
+
+  // after web fonts apply (widths change)
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(setAll);
+  } else {
+    setAll();
+  }
+
+  // keep correct on viewport changes
+  addEventListener('resize', setAll, { passive: true });
+
+  // keep correct if chip wraps/reflows later
+  const ro = new ResizeObserver(entries => {
+    for (const {target} of entries) setOrigin(target);
+  });
+  badges.forEach(el => ro.observe(el));
+
+  // (re)-start your float/tilt
+  badges.forEach((el, i) => {
+    gsap.to(el, {
+      y: (i % 2 ? 8 : -8),
+      x: (i % 3 ? -6 : 6),
+      rotation: (i % 2 ? 1.6 : -1.6),
+      duration: 3 + Math.random(),
+      ease: 'sine.inOut',
+      repeat: -1,
+      yoyo: true
+    });
+  });
+})();
+
 (function () {
   function runAnimations() {
     if (!window.gsap) return;
@@ -395,15 +456,25 @@ summary{cursor:pointer;font-weight:600}
     }, '-=0.6');
 
     // Continuous: badges float + tilt
-    gsap.utils.toArray('.badge').forEach((el, i) => {
-      gsap.to(el, {
-        y: (i % 2 ? 8 : -8),
-        x: (i % 3 ? -6 : 6),
-        rotation: (i % 2 ? 1.6 : -1.6),
-        duration: 3 + Math.random(),
-        yoyo: true, repeat: -1, ease: 'sine.inOut'
-      });
-    });
+// Continuous: badges float + tilt — pivot at the exact center in px
+gsap.utils.toArray('.badge').forEach((el, i) => {
+  // compute center in pixels (fixes occasional % origin quirks with flex items)
+  const rect = el.getBoundingClientRect();
+  const cx = rect.width  / 2;
+  const cy = rect.height / 2;
+
+  gsap.set(el, { transformOrigin: `${cx}px ${cy}px` });
+
+  gsap.to(el, {
+    y: (i % 2 ? 8 : -8),
+    x: (i % 3 ? -6 : 6),
+    rotation: (i % 2 ? 1.6 : -1.6),
+    duration: 3 + Math.random(),
+    ease: 'sine.inOut',
+    repeat: -1,
+    yoyo: true
+  });
+});
 
     // Continuous: headings breathe
     gsap.to('h1.big', { y: -4, duration: 3.0, yoyo: true, repeat: -1, ease: 'sine.inOut' });
