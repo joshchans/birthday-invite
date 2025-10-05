@@ -230,30 +230,29 @@ summary{cursor:pointer;font-weight:600}
 (function(){
   const canvas = document.getElementById('sparks');
   const ctx = canvas.getContext('2d');
+
+  const SPEED = 1.5; // ← 1.0 was old speed. Raise for faster, lower for slower.
   let particles = [];
 
   function resize(){
     const dpr = Math.min(2, window.devicePixelRatio||1);
-    canvas.style.width  = window.innerWidth + 'px';
+    canvas.style.width = window.innerWidth + 'px';
     canvas.style.height = window.innerHeight + 'px';
     canvas.width  = Math.floor(window.innerWidth  * dpr);
     canvas.height = Math.floor(window.innerHeight * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
-  addEventListener('resize', resize, {passive:true});
-  resize();
+  addEventListener('resize', resize, {passive:true}); resize();
 
   function spawn(n=4){
     for(let i=0;i<n;i++){
-      const ttl = 80 + Math.random()*120;
       particles.push({
         x: Math.random()*window.innerWidth,
         y: Math.random()*window.innerHeight,
-        vx: (Math.random()-.5)*.6,
+        vx: (Math.random()-.5)*.6,   // base velocity
         vy: (Math.random()-.5)*.6,
-        life: ttl,
-        ttl,
-        seed: Math.random()*1000
+        life: 220 + Math.random()*160, // long life so they’re not flickery
+        age: 0
       });
     }
   }
@@ -262,34 +261,32 @@ summary{cursor:pointer;font-weight:600}
     ctx.clearRect(0,0,window.innerWidth,window.innerHeight);
     ctx.globalCompositeOperation = 'lighter';
 
-    for(let i=0;i<particles.length;i++){
-      const p = particles[i];
-      p.x += p.vx; p.y += p.vy; p.life--;
+    particles.forEach(p=>{
+      p.x += p.vx * SPEED;
+      p.y += p.vy * SPEED;
+      p.age++; p.life--;
 
+      // bounce off edges
       if(p.x<0||p.x>window.innerWidth)  p.vx *= -1;
       if(p.y<0||p.y>window.innerHeight) p.vy *= -1;
 
-      const t = 1 - p.life/p.ttl;                 // 0 → 1 over lifetime
-      const fadeIn  = Math.min(1, t/0.15);
-      const fadeOut = Math.min(1, (p.life/p.ttl)/0.15);
-      const flicker = 0.85 + 0.15*Math.sin((p.ttl - p.life + p.seed)*0.5);
-      const alpha = Math.min(fadeIn, fadeOut) * flicker;
+      // gentle pulse (not flickery)
+      const cycle = p.age / (p.age + Math.max(1,p.life));
+      const alpha = 0.18 + 0.32 * Math.sin(cycle*Math.PI);
 
       const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,40);
-      g.addColorStop(0, `rgba(0,255,209,${0.35*alpha})`);
-      g.addColorStop(1, `rgba(106,91,255,0)`);
+      g.addColorStop(0, `rgba(0,255,209,${alpha})`);
+      g.addColorStop(1, 'rgba(106,91,255,0)');
       ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(p.x,p.y,40,0,Math.PI*2);
-      ctx.fill();
-    }
+      ctx.beginPath(); ctx.arc(p.x,p.y,40,0,Math.PI*2); ctx.fill();
+    });
 
-    particles = particles.filter(p => p.life > 0);
+    particles = particles.filter(p=>p.life>0);
     if(particles.length < 120) spawn();
+
     requestAnimationFrame(tick);
   })();
 })();
-
 /* ========= Mini track animation (responsive, no cut-off) ========= */
 (function(){
   const c = document.getElementById('track'); const ctx = c.getContext('2d');
@@ -367,38 +364,80 @@ summary{cursor:pointer;font-weight:600}
   qs('#mailtoLink').setAttribute('href','mailto:'+encodeURIComponent(cfg.organiserEmail||'host@example.com')+'?subject='+encodeURIComponent('Josh’s 21st — Hyper Karting RSVP'));
 
   // ======== Email API helpers ========
-  function emailShell(title, innerHtml){
-    // static "glitch" header (email-safe layering)
-    const glitchHeader = `
-      <div style="position:relative;display:inline-block;font-family:Orbitron,Arial,Helvetica,sans-serif;font-size:22px;letter-spacing:.06em;line-height:1.2">
-        <span style="position:absolute;left:1px;top:0;color:#00ffd1;opacity:.7">${title}</span>
-        <span style="position:absolute;left:-1px;top:0;color:#6a5bff;opacity:.6">${title}</span>
-        <span style="position:relative;color:#e6f1ff">${title}</span>
-      </div>`.trim();
+function emailShell(title, innerHtml){
+  const brand = "Josh’s 21st — Hyper Karting Party";
 
-    return `
-    <div style="background:#0b0e14;color:#e6f1ff;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;padding:24px">
-      <div style="max-width:680px;margin:0 auto;background:linear-gradient(160deg,#0e1324,#090d18);border:1px solid #1a2140;border-radius:16px;overflow:hidden">
-        <div style="padding:24px 22px;border-bottom:1px solid #151a2e;background:
-                    radial-gradient(800px 400px at 90% -10%, rgba(106,91,255,.25), transparent),
-                    radial-gradient(800px 400px at 10% 120%, rgba(0,255,209,.18), transparent)">
-          ${glitchHeader}
-        </div>
-        <div style="padding:20px">${innerHtml}
-          <p style="color:#9aa7b2;font-size:12px;margin-top:18px">This mailbox isn’t monitored. Replies go to the organiser.</p>
-        </div>
-      </div>
-    </div>`.trim();
-  }
-  function detailsTable(e){
-    return `
-    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;margin:16px auto;border-collapse:collapse">
-      <tr><td style="padding:8px 0"><strong>Date</strong></td><td style="padding:8px 0;text-align:right">${e.date||'TBC'}</td></tr>
-      <tr><td style="padding:8px 0"><strong>Time</strong></td><td style="padding:8px 0;text-align:right">${e.time||'TBC'}</td></tr>
-      <tr><td style="padding:8px 0"><strong>Where</strong></td><td style="padding:8px 0;text-align:right">${e.locationName||''}</td></tr>
-      <tr><td style="padding:8px 0"><strong>Address</strong></td><td style="padding:8px 0;text-align:right">${e.address||''}</td></tr>
-    </table>`.trim();
-  }
+  // Preheader text (hidden in most clients, shows in inbox preview)
+  const preheader = `RSVP • ${brand}`;
+
+  return `
+  <div style="margin:0;padding:24px;background:#0b0e14;color:#e6f1ff;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif">
+    <!-- preheader -->
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;visibility:hidden;mso-hide:all">
+      ${preheader} &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+    </div>
+
+    <div style="max-width:680px;margin:0 auto;border-radius:16px;overflow:hidden;border:1px solid #1a2140;background:#0a0f1d;
+                box-shadow:0 0 0 1px rgba(26,33,64,.4), 0 18px 60px rgba(0,255,209,.10)">
+      <!-- neon accent bar -->
+      <div style="height:4px;background:#00ffd1;background-image:linear-gradient(90deg,#00ffd1,#6a5bff)"></div>
+
+      <!-- header -->
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+        <tr>
+          <td style="padding:24px 22px;border-bottom:1px solid #151a2e;
+                     background:#0e1324;">
+            <div style="font-family:Orbitron,Arial,Helvetica,sans-serif;font-size:22px;letter-spacing:.06em;line-height:1.25;margin:0">
+              <span style="color:#00ffd1">Josh’s 21st</span>
+              <span style="opacity:.9"> — Hyper Karting Party</span>
+            </div>
+
+            <!-- subtle label for the email's purpose -->
+            <div style="margin-top:10px;display:inline-block;padding:6px 10px;border-radius:999px;
+                        background:#0c1328;border:1px solid #1b2442;color:#b9c6d4;
+                        font-weight:600;font-size:12px;letter-spacing:.03em;text-transform:none">
+              ${title}
+            </div>
+          </td>
+        </tr>
+
+        <!-- body -->
+        <tr>
+          <td style="padding:22px">
+            ${innerHtml}
+            <p style="color:#9aa7b2;font-size:12px;margin-top:18px">
+              This mailbox isn’t monitored. Replies go to the organiser.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>`.trim();
+}
+
+// (Optional) nicer details table that matches the header styling
+function detailsTable(e){
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0"
+         style="width:100%;max-width:560px;margin:16px auto;border-collapse:separate;border-spacing:0">
+    ${[
+      ["Date", e.date || "TBC"],
+      ["Time", e.time || "TBC"],
+      ["Where", e.locationName || ""],
+      ["Address", e.address || ""]
+    ].map((row,i)=>`
+      <tr>
+        <td style="padding:10px 12px;border:1px solid #1a2140;border-right:0;
+                   ${i===0?'border-top-left-radius:10px;':''}
+                   ${i===3?'border-bottom-left-radius:10px;':''};
+                   background:#0c1120;color:#e6f1ff"><strong>${row[0]}</strong></td>
+        <td style="padding:10px 12px;border:1px solid #1a2140;border-left:0;text-align:right;
+                   ${i===0?'border-top-right-radius:10px;':''}
+                   ${i===3?'border-bottom-right-radius:10px;':''};
+                   background:#0c1120;color:#cfe9ff">${row[1]}</td>
+      </tr>`).join("")}
+  </table>`.trim();
+}
 
   async function sendEmail(payload){
     const url = cfg.noreplyApiUrl;
