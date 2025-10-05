@@ -77,6 +77,13 @@ input:focus,textarea:focus{border-color:var(--neon1);box-shadow:0 0 0 3px rgba(0
 #rsvpStatus{min-height:1.3em}
 .faq{padding:64px 0}
 details{background:#0b1020;border:1px solid #151a2e;padding:12px 14px;border-radius:12px;margin-bottom:10px}
+/* ultra-soft tint, no hard edge */
+.details{
+  background:
+    radial-gradient(80rem 45rem at -30% -20%,
+      rgba(255,46,136,.06) 0,
+      rgba(255,46,136,0) 60%) !important;
+}
 summary{cursor:pointer;font-weight:600}
 .footer{padding:28px 0;border-top:1px solid #151a2e;color:#a8b9c9;text-align:center}
 .footer .tiny{font-size:.8rem;color:#94a5b6}
